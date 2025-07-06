@@ -17,11 +17,9 @@ AI Travel Planner is a web application that helps you generate, edit, and collab
 - **Drag-and-Drop Planner**: Easily rearrange daily activities and customize your schedule.
 - **Add/Edit Attractions & Food**: Manually add or edit places, including Google Maps links and ratings.
 - **Color Customization**: Personalize the look of your itinerary with custom colors for different item types.
-- **Import/Export**: Save your plans as JSON files or import them back anytime.
 - **Real-Time Collaboration**: Share a link to co-edit your itinerary with friends or family.
 
 ---
-
 
 ## How to Use
 
@@ -30,6 +28,7 @@ AI Travel Planner is a web application that helps you generate, edit, and collab
 3. **Edit & Rearrange**: Drag and drop items, add new places, or edit details as needed.
 4. **Optimize Routes**: Use the route optimization feature for each day.
 5. **Customize Colors**: Adjust colors for attractions and food for better visualization.
-6. **Import/Export**: Download your plan as a file or import an existing one.
-7. **Collaborate**: Share your unique link for real-time co-editing.
+6. **Collaborate**: Share your unique link for real-time co-editing.
+
+---
 
