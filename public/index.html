@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 旅遊行程規劃</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+        }
+        .draggable-item {
+            cursor: move;
+            transition: background-color 0.3s, box-shadow 0.2s, transform 0.2s;
+        }
+        .droppable-list {
+            min-height: 150px;
+            background-color: #f8f9fa;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            transition: background-color 0.2s;
+        }
+        .dragging {
+            opacity: 0.5;
+            background-color: #cce5ff !important; /* Ensure dragging style overrides custom colors */
+        }
+        #loading-spinner {
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        .scrolling-wrapper {
+            -webkit-overflow-scrolling: touch;
+        }
+        .scrolling-wrapper::-webkit-scrollbar {
+            height: 8px;
+        }
+        .scrolling-wrapper::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .scrolling-wrapper::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 10px;
+        }
+        .scrolling-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #aaa;
+        }
+        .placeholder {
+            background: #e9ecef;
+            border: 2px dashed #adb5bd;
+            border-radius: 0.375rem;
+            margin: 0.375rem 0;
+            transition: height 0.2s;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-full">
+        <header class="text-center mb-8 relative">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900">AI 旅遊行程規劃</h1>
+            <p class="text-lg text-gray-600 mt-2">在 AI 的幫助下，輕鬆打造您的完美旅程。</p>
+            <div class="absolute top-0 right-0 flex items-center space-x-2">
+                 <button id="importBtn" class="p-2 text-gray-500 hover:text-indigo-600" title="匯入行程">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                </button>
+                 <button id="exportBtn" class="p-2 text-gray-500 hover:text-indigo-600" title="匯出行程">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                </button>
+                <button id="openColorSettingsBtn" class="p-2 text-gray-500 hover:text-indigo-600" title="自訂顏色">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M17.488 3.822a.75.75 0 00-1.06-1.06l-2.022.92a.75.75 0 00-.212.212l-.92 2.022a.75.75 0 001.06 1.06l2.022-.92a.75.75 0 00.212-.212l.92-2.022zM2.512 12.178a.75.75 0 001.06 1.06l2.022-.92a.75.75 0 00.212-.212l.92-2.022a.75.75 0 00-1.06-1.06l-2.022.92a.75.75 0 00-.212.212l-.92 2.022zM10 2.5a.75.75 0 00-1.5 0v2.5a.75.75 0 001.5 0V2.5zM10 15a.75.75 0 00-1.5 0v2.5a.75.75 0 001.5 0V15zM2.5 10a.75.75 0 000 1.5h2.5a.75.75 0 000-1.5H2.5zM15 10a.75.75 0 000 1.5h2.5a.75.75 0 000-1.5H15z" />
+                        <path fill-rule="evenodd" d="M10 4a6 6 0 100 12 6 6 0 000-12zM7.25 8.5A1.25 1.25 0 118.5 7.25 1.25 1.25 0 017.25 8.5zM8.5 12.75a1.25 1.25 0 100-2.5 1.25 1.25 0 000 2.5zM12.75 8.5A1.25 1.25 0 1111.5 7.25 1.25 1.25 0 0112.75 8.5z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <button id="shareBtn" class="p-2 text-gray-500 hover:text-indigo-600" title="分享共編連結">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 8a3 3 0 00-6 0v8a3 3 0 006 0V8zm6 4a6 6 0 01-12 0V8a6 6 0 0112 0v4z" />
+                    </svg>
+                </button>
+                <input type="file" id="importFileInput" class="hidden" accept=".json">
+            </div>
+        </header>
+
+        <main>
+            <!-- User Input Section -->
+            <section id="userInputSection" class="bg-white p-6 rounded-lg shadow-md mb-8 max-w-4xl mx-auto">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800">1. 規劃您的冒險</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="destination" class="block text-sm font-medium text-gray-700 mb-1">您要去哪裡？</label>
+                        <input type="text" id="destination" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如：台灣">
+                    </div>
+                    <div>
+                        <label for="duration" class="block text-sm font-medium text-gray-700 mb-1">您的旅遊天數是？</label>
+                        <input type="number" id="duration" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如：5" value="5" min="1" max="14">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="preferences" class="block text-sm font-medium text-gray-700 mb-1">您對什麼感興趣？</label>
+                        <textarea id="preferences" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如：夜市、自然風景、文創園區，我一定要去台北101"></textarea>
+                    </div>
+                </div>
+                <div class="mt-6 text-center">
+                    <button id="generatePlanBtn" class="bg-indigo-600 text-white font-bold py-3 px-8 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                        AI自動分配初步行程
+                    </button>
+                </div>
+            </section>
+
+            <!-- Loading Indicator -->
+            <div id="loading" class="hidden text-center my-8">
+                <div id="loading-spinner" class="inline-block w-12 h-12 border-4 border-gray-200 rounded-full"></div>
+                <p id="loadingText" class="mt-4 text-lg text-gray-600">正在為您產生個人化的行程...</p>
+            </div>
+            
+            <!-- Message Box -->
+            <div id="messageBox" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative my-4 max-w-4xl mx-auto" role="alert">
+                <strong id="messageBoxTitle" class="font-bold">錯誤！</strong>
+                <span id="messageText" class="block sm:inline">發生了一些問題。</span>
+            </div>
+
+            <!-- Itinerary Planner Section -->
+            <section id="plannerSection" class="hidden">
+                <h2 class="text-3xl font-bold mb-6 text-center text-gray-800">2. 編輯您的每日行程看板</h2>
+                <div id="planner-container" class="flex overflow-x-auto scrolling-wrapper space-x-6 pb-4">
+                    <!-- Day columns will be dynamically generated here -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Add Item Modal -->
+    <div id="addItemModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">新增自訂項目</h3>
+            <input type="hidden" id="addItemDayKey">
+            <div class="mb-4">
+                <label for="newItemName" class="block text-sm font-medium text-gray-700 mb-1">項目名稱</label>
+                <input type="text" id="newItemName" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="例如：台北101">
+            </div>
+            <div class="mb-4">
+                <label for="newItemType" class="block text-sm font-medium text-gray-700 mb-1">類型</label>
+                <select id="newItemType" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="attraction">景點</option>
+                    <option value="food">美食</option>
+                </select>
+            </div>
+            <div class="flex justify-end space-x-4">
+                <button id="cancelAddItemBtn" class="bg-gray-500 text-white font-bold py-2 px-6 rounded-md hover:bg-gray-600">取消</button>
+                <button id="confirmAddItemBtn" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-md hover:bg-indigo-700 flex items-center justify-center">
+                    <span id="addItemBtnText">新增</span>
+                    <svg id="addItemBtnSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Item Modal -->
+    <div id="editItemModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full space-y-4">
+            <h3 class="text-2xl font-bold text-gray-800">編輯項目</h3>
+            <input type="hidden" id="editItemDayKey">
+            <input type="hidden" id="editItemIndex">
+            <div>
+                <label for="editItemName" class="block text-sm font-medium text-gray-700 mb-1">項目名稱</label>
+                <input type="text" id="editItemName" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+             <div>
+                <label for="editItemType" class="block text-sm font-medium text-gray-700 mb-1">類型</label>
+                <select id="editItemType" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="attraction">景點</option>
+                    <option value="food">美食</option>
+                </select>
+            </div>
+            <div>
+                <label for="editItemUrl" class="block text-sm font-medium text-gray-700 mb-1">Google Maps URL</label>
+                <input type="url" id="editItemUrl" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="https://maps.app.goo.gl/...">
+            </div>
+            <div class="flex justify-end space-x-4 pt-2">
+                <button id="cancelEditItemBtn" class="bg-gray-500 text-white font-bold py-2 px-6 rounded-md hover:bg-gray-600">取消</button>
+                <button id="confirmEditItemBtn" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-md hover:bg-indigo-700">儲存</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Color Settings Modal -->
+    <div id="colorSettingsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">自訂項目顏色</h3>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <label for="attractionColorPicker" class="text-lg">景點顏色</label>
+                    <input type="color" id="attractionColorPicker" class="h-10 w-16 p-1 border rounded-md">
+                </div>
+                <div class="flex items-center justify-between">
+                    <label for="foodColorPicker" class="text-lg">美食顏色</label>
+                    <input type="color" id="foodColorPicker" class="h-10 w-16 p-1 border rounded-md">
+                </div>
+            </div>
+            <div class="mt-6 text-right">
+                <button id="closeColorSettingsBtn" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-md hover:bg-indigo-700">完成</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteConfirmModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+            <h3 class="text-2xl font-bold mb-2 text-gray-800">確認刪除</h3>
+            <p class="mb-6">您確定要刪除這個項目嗎？此操作無法復原。</p>
+            <input type="hidden" id="deleteDayKey">
+            <input type="hidden" id="deleteIndex">
+            <div class="flex justify-end space-x-4">
+                <button id="cancelDeleteBtn" class="bg-gray-500 text-white font-bold py-2 px-6 rounded-md hover:bg-gray-600">取消</button>
+                <button id="confirmDeleteBtn" class="bg-red-600 text-white font-bold py-2 px-6 rounded-md hover:bg-red-700">確認</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分享 Modal -->
+    <div id="shareModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">分享共編連結</h3>
+            <div class="mb-4">
+                <input id="shareUrlInput" type="text" readonly class="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-100" />
+            </div>
+            <div class="flex justify-end space-x-4">
+                <button id="copyShareUrlBtn" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-md hover:bg-blue-700">複製連結</button>
+                <button id="closeShareModalBtn" class="bg-gray-500 text-white font-bold py-2 px-6 rounded-md hover:bg-gray-600">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- DOM Elements ---
+        const generatePlanBtn = document.getElementById('generatePlanBtn');
+        const plannerSection = document.getElementById('plannerSection');
+        const plannerContainer = document.getElementById('planner-container');
+        const loading = document.getElementById('loading');
+        const loadingText = document.getElementById('loadingText');
+        const messageBox = document.getElementById('messageBox');
+        const messageBoxTitle = document.getElementById('messageBoxTitle');
+        const messageText = document.getElementById('messageText');
+        
+        // Add Item Modal Elements
+        const addItemModal = document.getElementById('addItemModal');
+        const newItemNameInput = document.getElementById('newItemName');
+        const newItemTypeInput = document.getElementById('newItemType');
+        const addItemDayKeyInput = document.getElementById('addItemDayKey');
+        const confirmAddItemBtn = document.getElementById('confirmAddItemBtn');
+        const addItemBtnText = document.getElementById('addItemBtnText');
+        const addItemBtnSpinner = document.getElementById('addItemBtnSpinner');
+        const cancelAddItemBtn = document.getElementById('cancelAddItemBtn');
+
+        // Edit Item Modal Elements
+        const editItemModal = document.getElementById('editItemModal');
+        const editItemDayKeyInput = document.getElementById('editItemDayKey');
+        const editItemIndexInput = document.getElementById('editItemIndex');
+        const editItemNameInput = document.getElementById('editItemName');
+        const editItemTypeInput = document.getElementById('editItemType');
+        const editItemUrlInput = document.getElementById('editItemUrl');
+        const confirmEditItemBtn = document.getElementById('confirmEditItemBtn');
+        const cancelEditItemBtn = document.getElementById('cancelEditItemBtn');
+
+        // Color Settings Modal Elements
+        const colorSettingsModal = document.getElementById('colorSettingsModal');
+        const openColorSettingsBtn = document.getElementById('openColorSettingsBtn');
+        const closeColorSettingsBtn = document.getElementById('closeColorSettingsBtn');
+        const attractionColorPicker = document.getElementById('attractionColorPicker');
+        const foodColorPicker = document.getElementById('foodColorPicker');
+
+        // Delete Confirmation Modal Elements
+        const deleteConfirmModal = document.getElementById('deleteConfirmModal');
+        const deleteDayKeyInput = document.getElementById('deleteDayKey');
+        const deleteIndexInput = document.getElementById('deleteIndex');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+
+        // Import/Export Elements
+        const importBtn = document.getElementById('importBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const importFileInput = document.getElementById('importFileInput');
+        
+        // 分享 Modal Elements
+        const shareBtn = document.getElementById('shareBtn');
+        const shareModal = document.getElementById('shareModal');
+        const shareUrlInput = document.getElementById('shareUrlInput');
+        const copyShareUrlBtn = document.getElementById('copyShareUrlBtn');
+        const closeShareModalBtn = document.getElementById('closeShareModalBtn');
+        
+        // --- State ---
+        let dailyPlans = {};
+        let currentDuration = 5;
+        let draggedItemInfo = null;
+        let placeholder = null;
+        let itemColors = {
+            attraction: '#f9fafb', // default bg-gray-50
+            food: '#fce7f3',       // default pink-100
+        };
+
+        function resetDailyPlans(numberOfDays) {
+            dailyPlans = {};
+            for (let i = 1; i <= numberOfDays; i++) {
+                dailyPlans[`day${i}`] = [];
+            }
+        }
+            resetDailyPlans(currentDuration);
+
+        // --- Helper Functions ---
+        function extractJsonFromString(text) {
+            const codeBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+            if (codeBlockMatch && codeBlockMatch[1]) return codeBlockMatch[1];
+            const firstBracket = text.indexOf('[');
+            const firstBrace = text.indexOf('{');
+            let startIndex = -1;
+            if (firstBracket !== -1 && firstBrace !== -1) startIndex = Math.min(firstBracket, firstBrace);
+            else if (firstBracket !== -1) startIndex = firstBracket;
+            else startIndex = firstBrace;
+            if (startIndex === -1) return null;
+            const lastBracket = text.lastIndexOf(']');
+            const lastBrace = text.lastIndexOf('}');
+            const endIndex = Math.max(lastBracket, lastBrace);
+            if (endIndex === -1 || endIndex < startIndex) return null;
+            return text.substring(startIndex, endIndex + 1);
+        }
+
+        function createMapLink(name, destination) {
+            const query = encodeURIComponent(`${name} ${destination}`);
+            return `https://www.google.com/maps/search/?api=1&query=${query}`;
+        }
+
+        // --- Gemini API Calls ---
+        async function callGemini(prompt) {
+            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const response = await fetch('http://localhost:3001/api/aiplanning', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error(`API 請求失敗，狀態碼: ${response.status}`);
+            const result = await response.json();
+            return result;
+        }
+
+        async function generatePlan() {
+            const destination = document.getElementById('destination').value;
+            const duration = parseInt(document.getElementById('duration').value, 10);
+            const preferences = document.getElementById('preferences').value;
+
+            if (!destination || !duration || duration < 1 || !preferences) {
+                showMessage("請填寫所有欄位並確保天數至少為 1。");
+                return;
+            }
+
+            currentDuration = duration;
+            resetDailyPlans(currentDuration); 
+            
+            setLoading(true, "AI 正在為您分析與分配行程...");
+            plannerSection.classList.add('hidden');
+            hideMessage();
+
+            const prompt = `為一個到「${destination}」的為期 ${duration} 天的旅行創建一個旅遊計劃。旅客的偏好是：「${preferences}」。你的任務是將景點和美食地點合理地分配到這 ${duration} 天中。為每個項目提供：名稱(name)、星級評價(stars)，以及類型(type)。類型必須是 'attraction' (景點) 或 'food' (美食)。**強制規則**：1.  如果旅客偏好中提到 **具體的地點名稱** (例如：「台北101」、「士林夜市」)，你 **必須** 將它包含在行程中。2.  根據旅客偏好中提到的 **一般興趣** (例如：「自然風景」、「文創園區」)，推薦相關的地點。請以一個 JSON 物件的格式回傳，物件的鍵是 "day1" 到 "day${duration}"，每一天中包含一個鍵值為activities的list，裡面依序列出每一天的推薦項目。`;
+
+            try {
+                const rawText = await callGemini(prompt);
+                const jsonString = extractJsonFromString(rawText);
+                if (!jsonString) throw new Error("無法從 AI 回應中提取有效的 JSON 內容。");
+                const distributedPlan = JSON.parse(jsonString);
+                
+                console.log(distributedPlan)
+
+                for (let i = 1; i <= currentDuration; i++) {
+                    const dayKey = `day${i}`;
+                    console.log(distributedPlan[dayKey])
+                    if (distributedPlan[dayKey] && Array.isArray(distributedPlan[dayKey].activities)) {
+                        dailyPlans[dayKey] = distributedPlan[dayKey].activities.map(item => ({
+                            ...item,
+                            type: item.type,
+                            mapLink: createMapLink(item.name, destination)
+                        }));
+                    }
+                }
+                sendUpdate();
+                renderAllLists();
+                plannerSection.classList.remove('hidden');
+            } catch (error) {
+                console.error("generatePlan 錯誤:", error);
+                showMessage("抱歉，我們無法產生計劃。AI 可能正忙或回傳格式有誤，請稍後再試。");
+            } finally {
+                setLoading(false);
+            }
+        }
+        
+        async function optimizeDayRoute(dayKey) {
+            const attractionsForDay = dailyPlans[dayKey];
+            if (!attractionsForDay || attractionsForDay.length < 2) {
+                showMessage("行程提醒", "本日項目少於兩個，無需優化。");
+                return;
+            }
+
+            const destination = document.getElementById('destination').value;
+            const itemNames = attractionsForDay.map(a => a.name).join(', ');
+            
+            setLoading(true, `✨ 正在為第 ${dayKey.replace('day', '')} 天分析路線可行性...`);
+            hideMessage();
+
+            const prompt = `評估以下在「${destination}」的單日行程是否可行且合理。景點清單為：[${itemNames}]。你需要回傳一個 JSON 物件，包含三個欄位： 1. "isPossible": 一個布林值。如果景點相距過遠，不可能一天內順暢遊覽，則為 false。 2. "optimizedOrder": 一個陣列。如果 isPossible 為 true，此陣列應包含重新排序後的最佳景點順序。如果 isPossible 為 false，則回傳原始順序。 3. "reason": 一個字串。如果 isPossible 為 false，請提供簡短中文說明。如果 isPossible 為 true，則為空字串。`;
+
+            try {
+                const rawText = await callGemini(prompt);
+                const jsonString = extractJsonFromString(rawText);
+                if (!jsonString) throw new Error("無法從 AI 回應中提取有效的 JSON 內容。");
+                const result = JSON.parse(jsonString);
+                
+                if (result.isPossible) {
+                    const itemMap = new Map(attractionsForDay.map(item => [item.name, item]));
+                    const reorderedItems = result.optimizedOrder.map(name => itemMap.get(name)).filter(Boolean);
+                    attractionsForDay.forEach(item => { if (!result.optimizedOrder.includes(item.name)) reorderedItems.push(item); });
+                    dailyPlans[dayKey] = reorderedItems;
+                    sendUpdate();
+                    renderAllLists();
+                } else {
+                    showMessage("行程安排提醒", result.reason);
+                }
+            } catch (error) {
+                console.error(`optimizeDayRoute for ${dayKey} 錯誤:`, error);
+                showMessage("路線優化失敗。AI 可能無法理解景點，請再試一次。");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        async function handleAddItem() {
+            const dayKey = addItemDayKeyInput.value;
+            const newName = newItemNameInput.value.trim();
+            const newType = newItemTypeInput.value;
+            const destination = document.getElementById('destination').value;
+
+            if (!newName || !dayKey) return;
+
+            confirmAddItemBtn.disabled = true;
+            addItemBtnText.classList.add('hidden');
+            addItemBtnSpinner.classList.remove('hidden');
+
+            try {
+                const prompt = `「${newName}」在 Google 地圖上的星級評價是多少？請只回傳數字和「顆星」，例如：「4.7 顆星」。如果找不到，請回傳「無評分」。`;
+                const rating = await callGemini(prompt);
+                const newItem = { name: newName, type: newType, mapLink: createMapLink(newName, destination), stars: rating.trim() };
+                dailyPlans[dayKey].push(newItem);
+                sendUpdate();
+                renderAllLists();
+                addItemModal.classList.add('hidden');
+                newItemNameInput.value = '';
+            } catch(error) {
+                console.error("handleAddItem 錯誤:", error);
+                showMessage("無法抓取項目星級，請稍後再試。");
+            } finally {
+                confirmAddItemBtn.disabled = false;
+                addItemBtnText.classList.remove('hidden');
+                addItemBtnSpinner.classList.add('hidden');
+            }
+        }
+
+        function openAddItemModal(dayKey) {
+            addItemDayKeyInput.value = dayKey;
+            addItemModal.classList.remove('hidden');
+            newItemNameInput.focus();
+        }
+
+        function openEditItemModal(dayKey, index) {
+            const item = dailyPlans[dayKey][index];
+            editItemDayKeyInput.value = dayKey;
+            editItemIndexInput.value = index;
+            editItemNameInput.value = item.name;
+            editItemTypeInput.value = item.type;
+            editItemUrlInput.value = item.mapLink;
+            editItemModal.classList.remove('hidden');
+            editItemNameInput.focus();
+        }
+
+        function handleEditMapUrl() {
+            const dayKey = editMapDayKeyInput.value;
+            const index = editMapIndexInput.value;
+            const newUrl = editMapUrlInput.value.trim();
+
+            if (newUrl && dailyPlans[dayKey][index]) {
+                dailyPlans[dayKey][index].mapLink = newUrl;
+                renderAllLists();
+            }
+            editMapModal.classList.add('hidden');
+        }
+
+        function handleColorChange() {
+            itemColors.attraction = attractionColorPicker.value;
+            itemColors.food = foodColorPicker.value;
+            renderAllLists();
+        }
+
+        function openDeleteConfirmModal(dayKey, index) {
+            deleteDayKeyInput.value = dayKey;
+            deleteIndexInput.value = index;
+            deleteConfirmModal.classList.remove('hidden');
+        }
+
+        function handleConfirmDelete() {
+            const dayKey = deleteDayKeyInput.value;
+            const index = parseInt(deleteIndexInput.value, 10);
+            if(dailyPlans[dayKey]) {
+                dailyPlans[dayKey].splice(index, 1);
+                sendUpdate();
+                renderAllLists();
+            }
+            deleteConfirmModal.classList.add('hidden');
+        }
+        
+        // --- Import/Export ---
+        function handleExport() {
+            const dataToExport = {
+                version: 1,
+                destination: document.getElementById('destination').value,
+                duration: currentDuration,
+                plans: dailyPlans,
+                colors: itemColors,
+            };
+            const jsonString = JSON.stringify(dataToExport, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ai-travel-plan.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function handleImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.version !== 1 || !data.plans || !data.colors) {
+                        throw new Error("檔案格式不符或已過期。");
+                    }
+                    const importedDailyPlans = {};
+                    for (const dayKey in data.plans) {
+                        if (data.plans[dayKey] && Array.isArray(data.plans[dayKey].activities)) {
+                            importedDailyPlans[dayKey] = data.plans[dayKey].activities.map(item => ({
+                                ...item,
+                                type: item.type,
+                            }));
+                        } else if (Array.isArray(data.plans[dayKey])) {
+                            importedDailyPlans[dayKey] = data.plans[dayKey].map(item => ({
+                                ...item,
+                                type: item.type,
+                            }));
+                        }
+                    }
+                    dailyPlans = importedDailyPlans;
+                    itemColors = data.colors;
+                    currentDuration = data.duration;
+                    
+                    document.getElementById('destination').value = data.destination;
+                    document.getElementById('duration').value = currentDuration;
+                    attractionColorPicker.value = itemColors.attraction;
+                    foodColorPicker.value = itemColors.food;
+
+                    sendUpdate();
+                    renderAllLists();
+                    plannerSection.classList.remove('hidden');
+                    showMessage("成功！", "行程已成功匯入。");
+
+                } catch (err) {
+                    console.error("匯入失敗:", err);
+                    showMessage("匯入失敗", "讀取檔案時發生錯誤，請確認檔案格式是否正確。");
+                }
+            };
+            reader.readAsText(file);
+            // Reset file input so user can import the same file again
+            importFileInput.value = '';
+        }
+
+        // --- UI Rendering ---
+        function renderAllLists() {
+            plannerContainer.innerHTML = '';
+            const listOrder = Object.keys(dailyPlans).sort((a,b) => parseInt(a.slice(3)) - parseInt(b.slice(3)));
+            listOrder.forEach(dayKey => {
+                const title = `第 ${dayKey.replace('day', '')} 天`;
+                const column = createListColumn(dayKey, title);
+                if (dailyPlans[dayKey] && Array.isArray(dailyPlans[dayKey])) {
+                    dailyPlans[dayKey].forEach((item, index) => {
+                        const itemElement = createItemElement(item, index, dayKey);
+                        column.querySelector('.droppable-list').appendChild(itemElement);
+                    });
+                }
+                plannerContainer.appendChild(column);
+            });
+            addDragAndDropListeners();
+        }
+
+        function createListColumn(dayKey, title) {
+            const columnWrapper = document.createElement('div');
+            columnWrapper.className = 'flex-shrink-0 w-80 bg-white p-4 rounded-lg shadow-lg flex flex-col';
+            columnWrapper.innerHTML = `
+                <h3 class="font-semibold text-xl mb-2 text-center sticky top-0 bg-white py-2">${title}</h3>
+                <div class="button-container mb-4 grid grid-cols-2 gap-2">
+                    <button class="optimize-btn bg-purple-600 text-white font-bold py-2 px-3 rounded-md hover:bg-purple-700 transition text-xs">✨ 優化路線</button>
+                    <button class="add-btn bg-blue-600 text-white font-bold py-2 px-3 rounded-md hover:bg-blue-700 transition text-xs">⊕ 新增項目</button>
+                </div>
+                <div class="droppable-list space-y-3 overflow-y-auto flex-grow" data-day="${dayKey}"></div>
+            `;
+            columnWrapper.querySelector('.optimize-btn').addEventListener('click', () => optimizeDayRoute(dayKey));
+            columnWrapper.querySelector('.add-btn').addEventListener('click', () => openAddItemModal(dayKey));
+            return columnWrapper;
+        }
+
+        function createItemElement(item, index, dayKey) {
+            const itemElement = document.createElement('div');
+            itemElement.className = 'draggable-item p-3 rounded-lg shadow-sm border flex flex-col';
+            itemElement.style.backgroundColor = itemColors[item.type] || itemColors.attraction;
+            itemElement.setAttribute('draggable', 'true');
+            itemElement.setAttribute('data-index', index);
+            itemElement.setAttribute('data-day', dayKey);
+            const ratingNumber = parseFloat(item.stars) || 0;
+            const starDisplay = ratingNumber > 0 ? '★'.repeat(Math.round(ratingNumber)) : '';
+            
+            itemElement.innerHTML = `
+                <div class="flex-grow">
+                    <h5 class="font-semibold text-base mb-1">
+                        ${item.name}
+                        <button class="edit-item-btn ml-2 text-gray-500 hover:text-gray-700">✎</button>
+                    </h5>
+                    <div class="text-sm text-gray-600">
+                        <span class="text-yellow-500">${starDisplay}</span>
+                        <span class="ml-1">${item.stars || '無評分'}</span>
+                    </div>
+                </div>
+                <div class="text-xs mt-2 pt-2 border-t flex justify-between items-center">
+                    <div>
+                        <a href="${item.mapLink}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-medium">查看地圖</a>
+                    </div>
+                    <button class="remove-btn text-red-500 hover:text-red-700 text-lg font-bold">×</button>
+                </div>
+            `;
+            itemElement.querySelector('.remove-btn').addEventListener('click', (e) => { e.stopPropagation(); openDeleteConfirmModal(dayKey, index); });
+            itemElement.querySelector('.edit-item-btn').addEventListener('click', (e) => { e.stopPropagation(); openEditItemModal(dayKey, index); });
+            return itemElement;
+        }
+
+        // --- UI State & Helpers ---
+        function setLoading(isLoading, text = "載入中...") {
+            loadingText.textContent = text;
+            loading.classList.toggle('hidden', !isLoading);
+        }
+        
+        function showMessage(title = "錯誤！", text) {
+             messageBoxTitle.textContent = title;
+             messageText.textContent = text;
+             messageBox.classList.remove('hidden');
+        }
+
+        function hideMessage() {
+            messageBox.classList.add('hidden');
+        }
+        
+        // --- Event Listeners Setup ---
+        generatePlanBtn.addEventListener('click', generatePlan);
+        confirmAddItemBtn.addEventListener('click', handleAddItem);
+        cancelAddItemBtn.addEventListener('click', () => { addItemModal.classList.add('hidden'); newItemNameInput.value = ''; });
+        newItemNameInput.addEventListener('keydown', (e) => { if (e.isComposing) return; if (e.key === 'Enter') { e.preventDefault(); handleAddItem(); }});
+        
+        confirmEditItemBtn.addEventListener('click', handleConfirmEdit);
+        cancelEditItemBtn.addEventListener('click', () => editItemModal.classList.add('hidden'));
+        editItemUrlInput.addEventListener('keydown', (e) => { if (e.isComposing) return; if (e.key === 'Enter') { e.preventDefault(); handleConfirmEdit(); }});
+
+        openColorSettingsBtn.addEventListener('click', () => colorSettingsModal.classList.remove('hidden'));
+        closeColorSettingsBtn.addEventListener('click', () => colorSettingsBtn.classList.add('hidden'));
+        attractionColorPicker.addEventListener('input', handleColorChange, false);
+        foodColorPicker.addEventListener('input', handleColorChange, false);
+
+        confirmDeleteBtn.addEventListener('click', handleConfirmDelete);
+        cancelDeleteBtn.addEventListener('click', () => deleteConfirmModal.classList.add('hidden'));
+
+        importBtn.addEventListener('click', () => importFileInput.click());
+        exportBtn.addEventListener('click', handleExport);
+        importFileInput.addEventListener('change', handleImport);
+
+        function addDragAndDropListeners() {
+            plannerContainer.addEventListener('dragstart', handleDragStart);
+            plannerContainer.addEventListener('dragover', handleDragOver);
+            plannerContainer.addEventListener('drop', handleDrop);
+            plannerContainer.addEventListener('dragend', handleDragEnd);
+        }
+        
+        // --- Drag and Drop Handlers ---
+        function handleDragStart(e) {
+            if (!e.target.classList.contains('draggable-item')) return;
+            const item = e.target;
+            draggedItemInfo = { 
+                day: item.dataset.day, 
+                index: parseInt(item.dataset.index, 10),
+                height: item.offsetHeight
+            };
+            e.dataTransfer.effectAllowed = 'move';
+            
+            placeholder = document.createElement('div');
+            placeholder.className = 'placeholder';
+            placeholder.style.height = `${draggedItemInfo.height}px`;
+
+            setTimeout(() => {
+                item.classList.add('dragging');
+            }, 0);
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            const targetList = e.target.closest('.droppable-list');
+            if (!targetList) return;
+            
+            const afterElement = Array.from(targetList.children).find(child => {
+                 if (child.classList.contains('dragging') || child.classList.contains('placeholder')) return false;
+                 const box = child.getBoundingClientRect();
+                 return e.clientY < box.top + box.height / 2;
+            });
+            
+            if (afterElement) {
+                targetList.insertBefore(placeholder, afterElement);
+            } else {
+                targetList.appendChild(placeholder);
+            }
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            if (!placeholder || !placeholder.parentElement) {
+                handleDragEnd();
+                return;
+            }
+
+            const fromDay = draggedItemInfo.day;
+            const fromIndex = draggedItemInfo.index;
+            const toDay = placeholder.parentElement.dataset.day;
+            
+            let toIndex = Array.from(placeholder.parentElement.children).indexOf(placeholder);
+
+            placeholder.parentElement.removeChild(placeholder);
+            placeholder = null;
+
+            if (dailyPlans[fromDay] && dailyPlans[toDay]) {
+                const [movedItem] = dailyPlans[fromDay].splice(fromIndex, 1);
+
+                if (movedItem) {
+                    if (fromDay === toDay && fromIndex < toIndex) {
+                       toIndex--;
+                    }
+                    dailyPlans[toDay].splice(toIndex, 0, movedItem);
+                }
+                sendUpdate();
+            }
+            renderAllLists();
+        }
+
+        function handleDragEnd() {
+            if (placeholder && placeholder.parentElement) {
+                placeholder.parentElement.removeChild(placeholder);
+            }
+            const draggedElement = document.querySelector('.dragging');
+            if (draggedElement) {
+                draggedElement.classList.remove('dragging');
+            }
+            draggedItemInfo = null;
+            placeholder = null;
+        }
+
+        function handleConfirmEdit() {
+            const dayKey = editItemDayKeyInput.value;
+            const index = editItemIndexInput.value;
+            const newName = editItemNameInput.value.trim();
+            const newType = editItemTypeInput.value;
+            const newUrl = editItemUrlInput.value.trim();
+
+            if (newName && newUrl && dailyPlans[dayKey][index]) {
+                const item = dailyPlans[dayKey][index];
+                item.name = newName;
+                item.type = newType;
+                item.mapLink = newUrl;
+                sendUpdate();
+                renderAllLists();
+            }
+            editItemModal.classList.add('hidden');
+        }
+        
+        // --- Socket.IO 共編 ---
+        function getQueryParam(key) {
+            const url = new URL(window.location.href);
+            return url.searchParams.get(key);
+        }
+        function getOrCreateUserId() {
+            let id = getQueryParam('share');
+            if (id) return id;
+
+            id = localStorage.getItem('userId');
+            if (!id) {
+                id = Math.random().toString(36).substring(2) + Date.now().toString(36);
+                localStorage.setItem('userId', id);
+            }
+            return id;
+        }
+        const userId = getOrCreateUserId();
+        // const socket = io('https://ai-travel-planner-eqqn.onrender.com', { query: { id: userId } });
+        const socket = io('http://localhost:3001', { query: { id: userId } });
+        
+
+        let suppressUpdate = false;
+        socket.on('plans:update', (newPlans) => {
+            suppressUpdate = true;
+            const tempPlans = {};
+            for (const dayKey in newPlans) {
+                if (newPlans[dayKey] && Array.isArray(newPlans[dayKey].activities)) {
+                    tempPlans[dayKey] = newPlans[dayKey].activities.map(item => ({ 
+                        ...item,
+                        type: item.type,
+                    }));
+                } else if (Array.isArray(newPlans[dayKey])) {
+                    tempPlans[dayKey] = newPlans[dayKey].map(item => ({ 
+                        ...item,
+                        type: item.type,
+                    }));
+                }
+            }
+            dailyPlans = tempPlans;
+            renderAllLists();
+            plannerSection.classList.remove('hidden');
+            suppressUpdate = false;
+        });
+
+        function sendUpdate() {
+            if (suppressUpdate) return;
+            socket.emit('plans:change', dailyPlans);
+        }
+
+        // --- Initial Load ---
+        function init() {
+            attractionColorPicker.value = itemColors.attraction;
+            foodColorPicker.value = itemColors.food;
+            addDragAndDropListeners();
+        }
+        init();
+
+        // --- 分享功能 ---
+        shareBtn.addEventListener('click', () => {
+            const url = `${window.location.origin}${window.location.pathname}?share=${userId}`;
+            shareUrlInput.value = url;
+            shareModal.classList.remove('hidden');
+        });
+        closeShareModalBtn.addEventListener('click', () => shareModal.classList.add('hidden'));
+        copyShareUrlBtn.addEventListener('click', () => {
+            shareUrlInput.select();
+            document.execCommand('copy');
+            copyShareUrlBtn.textContent = '已複製!';
+            setTimeout(() => { copyShareUrlBtn.textContent = '複製連結'; }, 1200);
+        });
+
+    </script>
+</body>
+</html>
