@@ -246,6 +246,8 @@
     </div>
 
     <script type="module">
+        // --- API Server ---
+        const api_server = 'https://lazy-planner.onrender.com';
         // --- DOM Elements ---
         const generatePlanBtn = document.getElementById('generatePlanBtn');
         const plannerSection = document.getElementById('plannerSection');
@@ -347,7 +349,7 @@
         async function callGemini(prompt) {
             let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
             const payload = { contents: chatHistory };
-            const response = await fetch('http://localhost:3001/api/aiplanning', {
+            const response = await fetch(`${api_server}/api/aiplanning`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -825,7 +827,7 @@
         }
         const userId = getOrCreateUserId();
         // const socket = io('https://ai-travel-planner-eqqn.onrender.com', { query: { id: userId } });
-        const socket = io('http://localhost:3001', { query: { id: userId } });
+        const socket = io(api_server, { query: { id: userId } });
         
 
         let suppressUpdate = false;
