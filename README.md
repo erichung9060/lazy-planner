@@ -1,6 +1,7 @@
 # AI Travel Planner
 
 > Effortlessly create your perfect trip with the help of AI!
+<img width="1238" alt="image" src="https://github.com/user-attachments/assets/9157ade5-505a-47b5-963a-ec9b78633655" />
 
 ---
 
