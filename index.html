@@ -303,6 +303,7 @@
             attraction: '#f9fafb', // default bg-gray-50
             food: '#fce7f3',       // default pink-100
         };
+        let suppressUpdate = false;
 
         function resetDailyPlans(numberOfDays) {
             dailyPlans = {};
@@ -371,14 +372,10 @@
             try {
                 const rawText = await callGemini(prompt);
                 const jsonString = extractJsonFromString(rawText);
-                if (!jsonString) throw new Error("無法從 AI 回應中提取有效的 JSON 內容。");
                 const distributedPlan = JSON.parse(jsonString);
                 
-                console.log(distributedPlan)
-
                 for (let i = 1; i <= currentDuration; i++) {
                     const dayKey = `day${i}`;
-                    console.log(distributedPlan[dayKey])
                     if (distributedPlan[dayKey] && Array.isArray(distributedPlan[dayKey].activities)) {
                         dailyPlans[dayKey] = distributedPlan[dayKey].activities.map(item => ({
                             ...item,
@@ -614,16 +611,11 @@
         editItemUrlInput.addEventListener('keydown', (e) => { if (e.isComposing) return; if (e.key === 'Enter') { e.preventDefault(); handleConfirmEdit(); }});
 
         openColorSettingsBtn.addEventListener('click', () => colorSettingsModal.classList.remove('hidden'));
-        closeColorSettingsBtn.addEventListener('click', () => colorSettingsBtn.classList.add('hidden'));
-        attractionColorPicker.addEventListener('input', handleColorChange, false);
+        closeColorSettingsBtn.addEventListener('click', () => colorSettingsModal.classList.add('hidden'));        attractionColorPicker.addEventListener('input', handleColorChange, false);
         foodColorPicker.addEventListener('input', handleColorChange, false);
 
         confirmDeleteBtn.addEventListener('click', handleConfirmDelete);
         cancelDeleteBtn.addEventListener('click', () => deleteConfirmModal.classList.add('hidden'));
-
-        importBtn.addEventListener('click', () => importFileInput.click());
-        exportBtn.addEventListener('click', handleExport);
-        importFileInput.addEventListener('change', handleImport);
 
         function addDragAndDropListeners() {
             plannerContainer.addEventListener('dragstart', handleDragStart);
@@ -749,7 +741,6 @@
         const userId = getOrCreateUserId();
         const socket = io(api_server, { query: { id: userId } });
 
-        let suppressUpdate = false;
         socket.on('plans:update', (newPlans) => {
             suppressUpdate = true;
             const tempPlans = {};
